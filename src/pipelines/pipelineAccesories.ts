@@ -9,7 +9,7 @@ const preferences = getPreferenceValues<Preferences>();
 
 export const pipelineAccessoryFactories = {
   failedJobs: (pipeline: Pipeline) => {
-    if (pipeline.hasFailedJobs) {
+    if (pipeline.status === "failed" && pipeline.hasFailedJobs) {
       const failed_job = pipeline.failedJobs[0];
       return {
         text: {

@@ -15,7 +15,7 @@ export const mergeRequestActionFactories = {
     },
 
     openPipeline: (mr: MergeRequest) => {
-      if (mr.latestPipeline?.hasFailedJobs) {
+      if (mr.latestPipeline?.status === "failed" && mr.latestPipeline?.hasFailedJobs) {
         return (
           <Action.OpenInBrowser
             url={mr.latestPipeline!.failedJobs[0].web_url}
