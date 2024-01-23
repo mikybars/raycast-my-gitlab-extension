@@ -1,4 +1,4 @@
-import { checkStatusCode, graphQlEndpoint, headers } from "./common";
+import { getJsonBodyIfSuccess, graphQlEndpoint, headers } from "./common";
 import fetch from "node-fetch";
 
 export interface Project {
@@ -37,8 +37,7 @@ export function myProjects(): Promise<Project[]> {
       query: LIST_MY_PROJECTS_QUERY,
     }),
   })
-    .then(checkStatusCode)
-    .then((res) => res.json())
+    .then(getJsonBodyIfSuccess)
     .then((data) => {
       const projects = data.data.projects.nodes;
       return convertToProjects(projects);

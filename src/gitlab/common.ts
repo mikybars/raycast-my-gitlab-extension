@@ -24,9 +24,13 @@ export function pathToUrl(path: string): string {
   return `${preferences.gitlabInstance}${path}`;
 }
 
-export function checkStatusCode(res: Response | NodeFetchResponse): Response | NodeFetchResponse {
+export async function getJsonBodyIfSuccess(res: Response | NodeFetchResponse) {
   if (res.ok) {
-    return res;
+    const body = await res.json();
+    if (body.errors?.length > 0) {
+      throw new ApiValidationError(body.errors[0].message)
+    }
+    return body;
   }
 
   if (res.status === 401 || res.status === 403) {
@@ -37,6 +41,7 @@ export function checkStatusCode(res: Response | NodeFetchResponse): Response | N
 
 export class AuthorizationError extends Error {}
 export class UnknownServerError extends Error {}
+export class ApiValidationError extends Error {}
 
 export function tryExtractJira(s: string): Jira | undefined {
   if ((preferences.jiraInstance ?? "") === "") {

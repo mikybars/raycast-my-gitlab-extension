@@ -1,5 +1,5 @@
 import { AsyncState, useFetch } from "@raycast/utils";
-import { checkStatusCode, graphQlEndpoint, headers, pathToUrl } from "./common";
+import { getJsonBodyIfSuccess, graphQlEndpoint, headers, pathToUrl } from "./common";
 
 export interface Pipeline {
   project: {
@@ -122,7 +122,7 @@ export function getLatestPipelineForBranch(projectFullPath: string, branchName: 
       },
     }),
     parseResponse: async (res) => {
-      const data = await checkStatusCode(res).json();
+      const data = await getJsonBodyIfSuccess(res);
       if (data.data.project.pipelines.nodes.length === 0) {
         return undefined;
       }

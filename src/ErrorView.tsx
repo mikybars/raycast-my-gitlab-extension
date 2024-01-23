@@ -1,6 +1,6 @@
 import { Action, ActionPanel, Icon, List, getPreferenceValues, openExtensionPreferences } from "@raycast/api";
 import { FetchError } from "node-fetch";
-import { AuthorizationError, UnknownServerError } from "./gitlab/common";
+import { ApiValidationError, AuthorizationError, UnknownServerError } from "./gitlab/common";
 import { NoProjectsError } from "./MyDashboard";
 
 interface Preferences {
@@ -19,7 +19,7 @@ export function ErrorView(props: { error: Error }) {
     return authError;
   } else if (props.error.name === "FetchError" && (props.error as FetchError).code === "ENOTFOUND") {
     return connectionError;
-  } else if (props.error instanceof UnknownServerError) {
+  } else if (props.error instanceof UnknownServerError || props.error instanceof ApiValidationError) {
     return unknownError;
   } else if (props.error instanceof NoProjectsError) {
     return noProjectsError;

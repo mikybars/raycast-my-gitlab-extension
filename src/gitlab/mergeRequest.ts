@@ -1,6 +1,6 @@
 import { AsyncState, useFetch } from "@raycast/utils";
 import fetch from "node-fetch";
-import { Jira, checkStatusCode, tryExtractJira, graphQlEndpoint, headers } from "./common";
+import { Jira, getJsonBodyIfSuccess, tryExtractJira, graphQlEndpoint, headers } from "./common";
 import { Pipeline, convertToPipeline, PIPELINE_FRAGMENT, PipelineApi } from "./pipeline";
 import { User, enrichUser } from "./user";
 import { lastMrUpdateTimes } from "../storage";
@@ -117,7 +117,7 @@ query ListMergeRequests($project: ID!, $state: MergeRequestState = opened, $merg
                     name
                     username
                 }
-                pipelines(first: 1) {
+                pipelines(first: 200) {
                     nodes {
                         ...PipelineParts
                     }
@@ -165,7 +165,7 @@ export function markAsReady(mr: MergeRequest): Promise<void> {
       },
     }),
   })
-    .then(checkStatusCode)
+    .then(getJsonBodyIfSuccess)
     .then(() => {
       return;
     });
@@ -184,7 +184,7 @@ export function markAsDraft(mr: MergeRequest): Promise<void> {
       },
     }),
   })
-    .then(checkStatusCode)
+    .then(getJsonBodyIfSuccess)
     .then(() => {
       return;
     });
@@ -203,8 +203,7 @@ export function merge(mr: MergeRequest): Promise<void> {
       },
     }),
   })
-    .then(checkStatusCode)
-    .then((res) => res.json())
+    .then(getJsonBodyIfSuccess)
     .then((data) => {
       const errors = data.data.mergeRequestAccept.errors;
       if (errors.length > 0) {
@@ -224,7 +223,7 @@ export function allOpenMergeRequests(projectFullPath: string): AsyncState<MergeR
       },
     }),
     parseResponse: async (res) => {
-      const data = await checkStatusCode(res).json();
+      const data = await getJsonBodyIfSuccess(res);
       const mergeRequests = data.data.project.mergeRequests.nodes;
       return await convertToMergeRequests(mergeRequests);
     },
@@ -250,7 +249,7 @@ export function allMergedMergeRequestsToday(projectFullPath: string): AsyncState
       },
     }),
     parseResponse: async (res) => {
-      const data = await checkStatusCode(res).json();
+      const data = await getJsonBodyIfSuccess(res);
       const mergeRequests = data.data.project.mergeRequests.nodes;
       return convertToMergeRequests(mergeRequests);
     },

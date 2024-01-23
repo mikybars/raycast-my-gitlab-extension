@@ -1,4 +1,4 @@
-import { checkStatusCode, graphQlEndpoint, headers } from "./common";
+import { getJsonBodyIfSuccess, graphQlEndpoint, headers } from "./common";
 import { myUsername as myUsernameFromStorage } from "../storage";
 import fetch from "node-fetch";
 
@@ -25,8 +25,7 @@ export function myUsername(): Promise<string> {
       query: CURRENT_USER_QUERY,
     }),
   })
-    .then(checkStatusCode)
-    .then((res) => res.json())
+    .then(getJsonBodyIfSuccess)
     .then((data) => data.data.currentUser.username);
 }
 
