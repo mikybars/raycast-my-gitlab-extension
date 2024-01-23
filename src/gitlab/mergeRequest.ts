@@ -66,7 +66,7 @@ type CommentApi = Comment & {
   url: string;
 };
 
-export class MergeRequestCannotBeMergedError extends Error {}
+export class MergeRequestCannotBeMergedError extends Error { }
 
 const LIST_MERGE_REQUESTS_QUERY = `
 ${PIPELINE_FRAGMENT}
@@ -117,7 +117,8 @@ query ListMergeRequests($project: ID!, $state: MergeRequestState = opened, $merg
                     name
                     username
                 }
-                pipelines(first: 200) {
+                pipelines(first: 100) {
+                    # first arg avoids query max complexity error ¯\_(ツ)_/¯
                     nodes {
                         ...PipelineParts
                     }
@@ -264,6 +265,12 @@ async function convertToMergeRequests(mergeRequestsResponse: MergeRequestApi[]):
       webUrl: comment.url,
     };
   }
+  function latestPipeline(pipelines: PipelineApi[]): PipelineApi {
+    function latestCreatedFirst(p1: PipelineApi, p2: PipelineApi) {
+      return dayjs(p1.createdAt).isAfter(dayjs(p2.createdAt)) ? -1 : 1
+    }
+    return pipelines.toSorted(latestCreatedFirst)[0]
+  }
 
   const lastUpdateTimes = await lastMrUpdateTimes();
 
@@ -275,7 +282,7 @@ async function convertToMergeRequests(mergeRequestsResponse: MergeRequestApi[]):
     jira: tryExtractJira(mr.title),
     approvedBy: mr.approvedBy.nodes,
     mergedBy: mr.mergeUser,
-    latestPipeline: mr.pipelines.nodes.length > 0 ? convertToPipeline(mr.pipelines.nodes[0]) : undefined,
+    latestPipeline: mr.pipelines.nodes.length > 0 ? convertToPipeline(latestPipeline(mr.pipelines.nodes)) : undefined,
     comments: mr.notes.nodes.filter((c) => !c.system).map(convertToComment),
   }));
   mrs.forEach((mr) => (mr.hasComments = mr.comments.length > 0));

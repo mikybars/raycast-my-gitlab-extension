@@ -35,6 +35,7 @@ type PipelineStatus =
 export type PipelineApi = Pipeline & {
   ref: string;
   path: string;
+  createdAt: string;
   commit: {
     fullTitle: string;
   };
@@ -76,6 +77,7 @@ fragment PipelineParts on Pipeline {
     ref
     status
     path
+    createdAt
     updatedAt
     commit {
         fullTitle
