@@ -61,7 +61,7 @@ export const mergeRequestAccessoryFactories = {
     if (mr.state !== "merged" && mr.hasApprovers) {
       return {
         text: mr.approvedBy.length > 1 ? `${mr.approvedBy.length}` : undefined,
-        icon: { source: "../assets/approved.png", tintColor: Color.Green },
+        icon: { source: "../assets/approved.png", tintColor: mr.hasAllApprovals ? Color.Green : undefined },
         tooltip: `Approved by ${mr.approvedBy.map((u) => u.teamUsername).join(", ")}`,
       };
     }

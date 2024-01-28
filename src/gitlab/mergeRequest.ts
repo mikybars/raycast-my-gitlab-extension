@@ -29,6 +29,7 @@ export interface MergeRequest {
   hasComments: boolean;
   approvedBy: User[];
   hasApprovers: boolean;
+  hasAllApprovals: boolean;
   mergedBy?: User;
   latestPipeline?: Pipeline;
 }
@@ -36,6 +37,7 @@ export interface MergeRequest {
 export type MergeRequestState = "opened" | "closed" | "locked" | "merged";
 
 type MergeRequestApi = MergeRequest & {
+  approvalsLeft: number;
   diffHeadSha: string;
   conflicts: boolean;
   approvedBy: {
@@ -107,6 +109,7 @@ query ListMergeRequests($project: ID!, $state: MergeRequestState = opened, $merg
                 project {
                     fullPath
                 }
+                approvalsLeft
                 approvedBy {
                     nodes {
                         name
@@ -276,6 +279,7 @@ async function convertToMergeRequests(mergeRequestsResponse: MergeRequestApi[]):
 
   const mrs = mergeRequestsResponse.map((mr) => ({
     ...mr,
+    hasAllApprovals: mr.approvalsLeft === 0,
     sha: mr.diffHeadSha,
     hasConflicts: mr.conflicts,
     hasUpdates: lastUpdateTimes.get(mr.id)?.isBefore(dayjs(mr.updatedAt), "second") ?? false,
