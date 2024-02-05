@@ -32,6 +32,9 @@ export interface MergeRequest {
   hasAllApprovals: boolean;
   mergedBy?: User;
   latestPipeline?: Pipeline;
+  mergeOptions: {
+    squash: boolean;
+  }
 }
 
 export type MergeRequestState = "opened" | "closed" | "locked" | "merged";
@@ -50,6 +53,7 @@ type MergeRequestApi = MergeRequest & {
   notes: {
     nodes: CommentApi[];
   };
+  squashOnMerge: boolean;
 };
 
 export interface Comment {
@@ -87,6 +91,7 @@ query ListMergeRequests($project: ID!, $state: MergeRequestState = opened, $merg
                 conflicts
                 webUrl
                 sourceBranch
+                squashOnMerge
                 author {
                     name
                     username
@@ -145,11 +150,12 @@ mutation MergeRequestSetDraftMutation($project: ID!, $mrId: String!, $draft: Boo
 `;
 
 const MERGE_REQUEST_ACCEPT_MUTATION = `
-mutation MergeRequestAcceptMutation($project: ID!, $mrId: String!, $sha: String!) {
+mutation MergeRequestAcceptMutation($project: ID!, $mrId: String!, $sha: String!, $squash: Boolean) {
     mergeRequestAccept(input: { 
         projectPath: $project, 
         iid: $mrId,
-        sha: $sha
+        sha: $sha,
+        squash: $squash
     }) {
         errors
     }
@@ -204,6 +210,7 @@ export function merge(mr: MergeRequest): Promise<void> {
         project: mr.project.fullPath,
         mrId: mr.iid,
         sha: mr.sha,
+        squash: mr.mergeOptions.squash
       },
     }),
   })
@@ -288,6 +295,9 @@ async function convertToMergeRequests(mergeRequestsResponse: MergeRequestApi[]):
     mergedBy: mr.mergeUser,
     latestPipeline: mr.pipelines.nodes.length > 0 ? convertToPipeline(latestPipeline(mr.pipelines.nodes)) : undefined,
     comments: mr.notes.nodes.filter((c) => !c.system).map(convertToComment),
+    mergeOptions: {
+      squash: mr.squashOnMerge
+    }
   }));
   mrs.forEach((mr) => (mr.hasComments = mr.comments.length > 0));
   mrs.forEach((mr) => (mr.hasApprovers = mr.approvedBy.length > 0));

@@ -53,7 +53,7 @@ export const mergeRequestActionFactories = {
     merge: (mr: MergeRequest) => {
       return (
         <Action
-          title="Merge"
+          title={mr.mergeOptions.squash ? "Merge with Squash" : "Merge with Commit"}
           icon={{ source: "../assets/merged.png", tintColor: Color.Magenta }}
           onAction={() =>
             merge(mr)
