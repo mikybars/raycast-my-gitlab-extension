@@ -1,5 +1,16 @@
 # My GitLab Dashboard
 
+## Install
+
+It could be argued that this extension belongs in the [Raycast Store](https://www.raycast.com/store)
+but for a number of reasons I decided not to publish it. Here's how you can run it locally:
+
+```bash
+gh repo clone mikybars/raycast-my-gitlab-extension
+cd raycast-my-gitlab-extension
+npm install && npm run dev
+```
+
 ## Why this extension
 This extension was born out of pure necessity. It's true that in the Raycast Store you can already find an (excellent)
 [GitLab extension](https://www.raycast.com/tonka3000/gitlab) which covers almost all your bases but what I actually
