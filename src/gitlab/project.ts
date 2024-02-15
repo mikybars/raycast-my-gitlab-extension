@@ -15,8 +15,8 @@ type ProjectApi = Project & {
 };
 
 const LIST_MY_PROJECTS_QUERY = `
-query ListMyProjects {
-    projects(membership: true) {
+query ListMyProjects($after: String) {
+    projects(membership: true, after: $after) {
         nodes {
             id
             name
@@ -25,23 +25,35 @@ query ListMyProjects {
                 rootRef
             }
         }
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
     }
 }
 `;
 
 export function myProjects(): Promise<Project[]> {
-  return fetch(graphQlEndpoint, {
-    headers,
-    method: "post",
-    body: JSON.stringify({
-      query: LIST_MY_PROJECTS_QUERY,
-    }),
-  })
-    .then(getJsonBodyIfSuccess)
-    .then((data) => {
-      const projects = data.data.projects.nodes;
-      return convertToProjects(projects);
+  async function nextPage(after?: String): Promise<Project[]> {
+    const res = await fetch(graphQlEndpoint, {
+      headers,
+      method: "post",
+      body: JSON.stringify({
+        query: LIST_MY_PROJECTS_QUERY,
+        variables: {
+          after
+        },
+      }),
     });
+    const data = await getJsonBodyIfSuccess(res);
+    const projects = convertToProjects(data.data.projects.nodes);
+    if (!data.data.projects.pageInfo.hasNextPage) {
+      return projects
+    }
+    return [...projects, ...await nextPage(data.data.projects.pageInfo.endCursor)]
+  }
+
+  return nextPage();
 }
 
 export function convertToProjects(projectsResponse: ProjectApi[]) {
