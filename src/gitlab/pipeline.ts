@@ -16,6 +16,7 @@ export interface Pipeline {
   failedJobs: Job[];
   hasRunningJobs: boolean;
   hasFailedJobs: boolean;
+  failureReason: string;
 }
 
 type PipelineStatus =
@@ -79,6 +80,7 @@ fragment PipelineParts on Pipeline {
     path
     createdAt
     updatedAt
+    failureReason
     commit {
         fullTitle
     }
