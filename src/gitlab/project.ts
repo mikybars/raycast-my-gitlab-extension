@@ -34,23 +34,23 @@ query ListMyProjects($after: String) {
 `;
 
 export function myProjects(): Promise<Project[]> {
-  async function nextPage(after?: String): Promise<Project[]> {
+  async function nextPage(after?: string): Promise<Project[]> {
     const res = await fetch(graphQlEndpoint, {
-      headers,
+      headers: headers,
       method: "post",
       body: JSON.stringify({
         query: LIST_MY_PROJECTS_QUERY,
         variables: {
-          after
+          after,
         },
       }),
     });
     const data = await getJsonBodyIfSuccess(res);
     const projects = convertToProjects(data.data.projects.nodes);
     if (!data.data.projects.pageInfo.hasNextPage) {
-      return projects
+      return projects;
     }
-    return [...projects, ...await nextPage(data.data.projects.pageInfo.endCursor)]
+    return [...projects, ...(await nextPage(data.data.projects.pageInfo.endCursor))];
   }
 
   return nextPage();

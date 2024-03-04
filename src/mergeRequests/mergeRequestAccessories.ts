@@ -75,7 +75,7 @@ export const mergeRequestAccessoryFactories = {
           icon: { source: Icon.XMarkCircle, tintColor: Color.Red },
           tooltip: mr.latestPipeline?.hasFailedJobs
             ? `Pipeline failed at ${firstFailedJob.stage}:${firstFailedJob.name}`
-            : mr.latestPipeline?.failureReason
+            : mr.latestPipeline?.failureReason,
         };
       }
       case "running": {

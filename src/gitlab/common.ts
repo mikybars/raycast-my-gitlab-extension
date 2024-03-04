@@ -28,7 +28,7 @@ export async function getJsonBodyIfSuccess(res: Response | NodeFetchResponse) {
   if (res.ok) {
     const body = await res.json();
     if (body.errors?.length > 0) {
-      throw new ApiValidationError(body.errors[0].message)
+      throw new ApiValidationError(body.errors[0].message);
     }
     return body;
   }

@@ -34,7 +34,7 @@ export interface MergeRequest {
   latestPipeline?: Pipeline;
   mergeOptions: {
     squash: boolean;
-  }
+  };
 }
 
 export type MergeRequestState = "opened" | "closed" | "locked" | "merged";
@@ -70,7 +70,7 @@ type CommentApi = Comment & {
   url: string;
 };
 
-export class MergeRequestCannotBeMergedError extends Error { }
+export class MergeRequestCannotBeMergedError extends Error {}
 
 const LIST_MERGE_REQUESTS_QUERY = `
 ${PIPELINE_FRAGMENT}
@@ -134,10 +134,10 @@ query ListMergeRequests($project: ID!, $state: MergeRequestState = opened, $merg
 
 const MERGE_REQUEST_SET_DRAFT_MUTATION = `
 mutation MergeRequestSetDraftMutation($project: ID!, $mrId: String!, $draft: Boolean!) {
-    mergeRequestSetDraft(input: { 
-        projectPath: $project, 
-        iid: $mrId, 
-        draft: $draft 
+    mergeRequestSetDraft(input: {
+        projectPath: $project,
+        iid: $mrId,
+        draft: $draft
     }) {
         errors
     }
@@ -146,8 +146,8 @@ mutation MergeRequestSetDraftMutation($project: ID!, $mrId: String!, $draft: Boo
 
 const MERGE_REQUEST_ACCEPT_MUTATION = `
 mutation MergeRequestAcceptMutation($project: ID!, $mrId: String!, $sha: String!, $squash: Boolean) {
-    mergeRequestAccept(input: { 
-        projectPath: $project, 
+    mergeRequestAccept(input: {
+        projectPath: $project,
         iid: $mrId,
         sha: $sha,
         squash: $squash
@@ -159,7 +159,7 @@ mutation MergeRequestAcceptMutation($project: ID!, $mrId: String!, $sha: String!
 
 export function markAsReady(mr: MergeRequest): Promise<void> {
   return fetch(graphQlEndpoint, {
-    headers,
+    headers: headers,
     method: "post",
     body: JSON.stringify({
       query: MERGE_REQUEST_SET_DRAFT_MUTATION,
@@ -178,7 +178,7 @@ export function markAsReady(mr: MergeRequest): Promise<void> {
 
 export function markAsDraft(mr: MergeRequest): Promise<void> {
   return fetch(graphQlEndpoint, {
-    headers,
+    headers: headers,
     method: "post",
     body: JSON.stringify({
       query: MERGE_REQUEST_SET_DRAFT_MUTATION,
@@ -197,7 +197,7 @@ export function markAsDraft(mr: MergeRequest): Promise<void> {
 
 export function merge(mr: MergeRequest): Promise<void> {
   return fetch(graphQlEndpoint, {
-    headers,
+    headers: headers,
     method: "post",
     body: JSON.stringify({
       query: MERGE_REQUEST_ACCEPT_MUTATION,
@@ -205,7 +205,7 @@ export function merge(mr: MergeRequest): Promise<void> {
         project: mr.project.fullPath,
         mrId: mr.iid,
         sha: mr.sha,
-        squash: mr.mergeOptions.squash
+        squash: mr.mergeOptions.squash,
       },
     }),
   })
@@ -220,7 +220,7 @@ export function merge(mr: MergeRequest): Promise<void> {
 
 export function allOpenMergeRequests(projectFullPath: string): AsyncState<MergeRequest[]> {
   return useFetch<MergeRequest[]>(graphQlEndpoint, {
-    headers,
+    headers: headers,
     method: "post",
     body: JSON.stringify({
       query: LIST_MERGE_REQUESTS_QUERY,
@@ -244,7 +244,7 @@ export function allMergedMergeRequestsToday(projectFullPath: string): AsyncState
   }
 
   return useFetch<MergeRequest[]>(graphQlEndpoint, {
-    headers,
+    headers: headers,
     method: "post",
     body: JSON.stringify({
       query: LIST_MERGE_REQUESTS_QUERY,
@@ -285,8 +285,8 @@ async function convertToMergeRequests(mergeRequestsResponse: MergeRequestApi[]):
     comments: mr.notes.nodes.filter((c) => !c.system).map(convertToComment),
     latestPipeline: convertToPipeline(mr.headPipeline),
     mergeOptions: {
-      squash: mr.squashOnMerge
-    }
+      squash: mr.squashOnMerge,
+    },
   }));
   mrs.forEach((mr) => (mr.hasComments = mr.comments.length > 0));
   mrs.forEach((mr) => (mr.hasApprovers = mr.approvedBy.length > 0));

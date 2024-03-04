@@ -116,7 +116,7 @@ query DefaultBranchLatestPipeline($project: ID!, $defaultBranch: String!) {
 
 export function getLatestPipelineForBranch(projectFullPath: string, branchName: string): AsyncState<Pipeline> {
   return useFetch<Pipeline | undefined>(graphQlEndpoint, {
-    headers,
+    headers: headers,
     method: "post",
     body: JSON.stringify({
       query: LATEST_PIPELINE_QUERY,

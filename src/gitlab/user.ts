@@ -19,7 +19,7 @@ query CurrentUser {
 
 export function myUsername(): Promise<string> {
   return fetch(graphQlEndpoint, {
-    headers,
+    headers: headers,
     method: "post",
     body: JSON.stringify({
       query: CURRENT_USER_QUERY,
