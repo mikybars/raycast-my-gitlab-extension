@@ -4,7 +4,7 @@ import { Job, Pipeline } from "../gitlab/pipeline";
 export const pipelineActionFactories = {
   browse: {
     openFailedJob: (pipeline: Pipeline) => {
-      if (pipeline.hasFailedJobs) {
+      if (pipeline.status === "failed" && pipeline.hasFailedJobs) {
         return <JobAction job={pipeline.failedJobs[0]} />;
       }
     },
