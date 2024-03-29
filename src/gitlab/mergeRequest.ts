@@ -1,10 +1,10 @@
-import { AsyncState, useFetch } from "@raycast/utils";
-import fetch from "node-fetch";
-import { Jira, getJsonBodyIfSuccess, tryExtractJira, graphQlEndpoint, headers } from "./common";
+import { AsyncState, useCachedPromise } from "@raycast/utils";
+import { Jira, tryExtractJira, validResponse, client } from "./common";
 import { Pipeline, convertToPipeline, PIPELINE_FRAGMENT, PipelineApi } from "./pipeline";
 import { User, enrichUser } from "./user";
 import { lastMrUpdateTimes } from "../storage";
 import dayjs from "dayjs";
+import { gql } from '@urql/core';
 
 export interface MergeRequest {
   project: {
@@ -70,9 +70,9 @@ type CommentApi = Comment & {
   url: string;
 };
 
-export class MergeRequestCannotBeMergedError extends Error {}
+export class MergeRequestCannotBeMergedError extends Error { }
 
-const LIST_MERGE_REQUESTS_QUERY = `
+const LIST_MERGE_REQUESTS_QUERY = gql`
 ${PIPELINE_FRAGMENT}
 query ListMergeRequests($project: ID!, $state: MergeRequestState = opened, $mergedAfter: Time) {
     project(fullPath: $project) {
@@ -157,83 +157,56 @@ mutation MergeRequestAcceptMutation($project: ID!, $mrId: String!, $sha: String!
 }
 `;
 
-export function markAsReady(mr: MergeRequest): Promise<void> {
-  return fetch(graphQlEndpoint, {
-    headers: headers,
-    method: "post",
-    body: JSON.stringify({
-      query: MERGE_REQUEST_SET_DRAFT_MUTATION,
-      variables: {
-        project: mr.project.fullPath,
-        mrId: mr.iid,
-        draft: false,
-      },
-    }),
-  })
-    .then(getJsonBodyIfSuccess)
-    .then(() => {
-      return;
-    });
+export async function markAsReady(mr: MergeRequest): Promise<void> {
+  const res = await client.mutation(
+    MERGE_REQUEST_SET_DRAFT_MUTATION,
+    {
+      project: mr.project.fullPath,
+      mrId: mr.iid,
+      draft: false
+    }
+  ).toPromise();
+  validResponse(res);
 }
 
-export function markAsDraft(mr: MergeRequest): Promise<void> {
-  return fetch(graphQlEndpoint, {
-    headers: headers,
-    method: "post",
-    body: JSON.stringify({
-      query: MERGE_REQUEST_SET_DRAFT_MUTATION,
-      variables: {
-        project: mr.project.fullPath,
-        mrId: mr.iid,
-        draft: true,
-      },
-    }),
-  })
-    .then(getJsonBodyIfSuccess)
-    .then(() => {
-      return;
-    });
+export async function markAsDraft(mr: MergeRequest): Promise<void> {
+  const res = await client.mutation(
+    MERGE_REQUEST_SET_DRAFT_MUTATION,
+    {
+      project: mr.project.fullPath,
+      mrId: mr.iid,
+      draft: true
+    }
+  ).toPromise();
+  validResponse(res);
 }
 
-export function merge(mr: MergeRequest): Promise<void> {
-  return fetch(graphQlEndpoint, {
-    headers: headers,
-    method: "post",
-    body: JSON.stringify({
-      query: MERGE_REQUEST_ACCEPT_MUTATION,
-      variables: {
-        project: mr.project.fullPath,
-        mrId: mr.iid,
-        sha: mr.sha,
-        squash: mr.mergeOptions.squash,
-      },
-    }),
-  })
-    .then(getJsonBodyIfSuccess)
-    .then((data) => {
-      const errors = data.data.mergeRequestAccept.errors;
-      if (errors.length > 0) {
-        throw new MergeRequestCannotBeMergedError(errors[0]);
-      }
-    });
+export async function merge(mr: MergeRequest): Promise<void> {
+  const res = await client.mutation(
+    MERGE_REQUEST_ACCEPT_MUTATION,
+    {
+      project: mr.project.fullPath,
+      mrId: mr.iid,
+      sha: mr.sha,
+      squash: mr.mergeOptions.squash
+    }
+  ).toPromise();
+  const errors = res.data.mergeRequestAccept.errors;
+  if (errors.length > 0) {
+    throw new MergeRequestCannotBeMergedError(errors[0]);
+  }
+}
+
+async function mergeRequestsQuery(args) {
+  const response = await client.query(LIST_MERGE_REQUESTS_QUERY, args).toPromise();
+  const data = validResponse(response).data.project.mergeRequests.nodes;
+  return await convertToMergeRequests(data);
 }
 
 export function allOpenMergeRequests(projectFullPath: string): AsyncState<MergeRequest[]> {
-  return useFetch<MergeRequest[]>(graphQlEndpoint, {
-    headers: headers,
-    method: "post",
-    body: JSON.stringify({
-      query: LIST_MERGE_REQUESTS_QUERY,
-      variables: {
-        project: projectFullPath,
-      },
-    }),
-    parseResponse: async (res) => {
-      const data = await getJsonBodyIfSuccess(res);
-      const mergeRequests = data.data.project.mergeRequests.nodes;
-      return await convertToMergeRequests(mergeRequests);
-    },
-  });
+  return useCachedPromise(
+    (project) => mergeRequestsQuery({ project }),
+    [projectFullPath]);
 }
 
 export function allMergedMergeRequestsToday(projectFullPath: string): AsyncState<MergeRequest[]> {
@@ -243,23 +216,9 @@ export function allMergedMergeRequestsToday(projectFullPath: string): AsyncState
     return today.toISOString();
   }
 
-  return useFetch<MergeRequest[]>(graphQlEndpoint, {
-    headers: headers,
-    method: "post",
-    body: JSON.stringify({
-      query: LIST_MERGE_REQUESTS_QUERY,
-      variables: {
-        project: projectFullPath,
-        state: "merged",
-        mergedAfter: todayAtMidnightIso(),
-      },
-    }),
-    parseResponse: async (res) => {
-      const data = await getJsonBodyIfSuccess(res);
-      const mergeRequests = data.data.project.mergeRequests.nodes;
-      return convertToMergeRequests(mergeRequests);
-    },
-  });
+  return useCachedPromise(
+    (project) => mergeRequestsQuery({ project, state: "merged", mergedAfter: todayAtMidnightIso() }),
+    [projectFullPath]);
 }
 
 async function convertToMergeRequests(mergeRequestsResponse: MergeRequestApi[]): Promise<MergeRequest[]> {

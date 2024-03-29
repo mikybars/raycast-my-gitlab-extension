@@ -1,5 +1,7 @@
 import { getPreferenceValues } from "@raycast/api";
+import { Client, OperationResult, cacheExchange, fetchExchange } from "@urql/core";
 import { Response as NodeFetchResponse } from "node-fetch";
+import fetch from "node-fetch";
 
 interface Preferences {
   gitlabInstance: string;
@@ -20,8 +22,31 @@ export interface Jira {
 
 export const graphQlEndpoint = `${preferences.gitlabInstance}/api/graphql`;
 
+export const client = new Client({
+  fetch: fetch,
+  url: graphQlEndpoint,
+  exchanges: [cacheExchange, fetchExchange],
+  fetchOptions: () => {
+    return {
+      headers: {
+        Authorization: `bearer ${preferences.gitlabToken}`
+      }
+    };
+  },
+});
+
 export function pathToUrl(path: string): string {
   return `${preferences.gitlabInstance}${path}`;
+}
+
+export function validResponse(res: OperationResult<any, any>): OperationResult<any, any> {
+  if (!res.error) {
+    return res;
+  }
+  if (res.error.message.match(/invalid token/i)) {
+    throw new AuthorizationError(res.error.message)
+  }
+  throw new UnknownServerError(res.error.message)
 }
 
 export async function getJsonBodyIfSuccess(res: Response | NodeFetchResponse) {

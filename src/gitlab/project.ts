@@ -1,5 +1,5 @@
-import { getJsonBodyIfSuccess, graphQlEndpoint, headers } from "./common";
-import fetch from "node-fetch";
+import { gql } from "@urql/core";
+import { client, validResponse } from "./common";
 
 export interface Project {
   id: string;
@@ -14,7 +14,7 @@ type ProjectApi = Project & {
   };
 };
 
-const LIST_MY_PROJECTS_QUERY = `
+const LIST_MY_PROJECTS_QUERY = gql`
 query ListMyProjects($after: String) {
     projects(membership: true, after: $after) {
         nodes {
@@ -35,22 +35,13 @@ query ListMyProjects($after: String) {
 
 export function myProjects(): Promise<Project[]> {
   async function nextPage(after?: string): Promise<Project[]> {
-    const res = await fetch(graphQlEndpoint, {
-      headers: headers,
-      method: "post",
-      body: JSON.stringify({
-        query: LIST_MY_PROJECTS_QUERY,
-        variables: {
-          after,
-        },
-      }),
-    });
-    const data = await getJsonBodyIfSuccess(res);
-    const projects = convertToProjects(data.data.projects.nodes);
-    if (!data.data.projects.pageInfo.hasNextPage) {
+    const res = await client.query(LIST_MY_PROJECTS_QUERY, { after }).toPromise();
+    const validRes = validResponse(res);
+    const projects = convertToProjects(validRes.data.projects.nodes);
+    if (!validRes.data.projects.pageInfo.hasNextPage) {
       return projects;
     }
-    return [...projects, ...(await nextPage(data.data.projects.pageInfo.endCursor))];
+    return [...projects, ...(await nextPage(validRes.data.projects.pageInfo.endCursor))];
   }
 
   return nextPage();

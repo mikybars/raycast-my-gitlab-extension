@@ -1,5 +1,6 @@
-import { AsyncState, useFetch } from "@raycast/utils";
-import { getJsonBodyIfSuccess, graphQlEndpoint, headers, pathToUrl } from "./common";
+import { AsyncState, useCachedPromise } from "@raycast/utils";
+import { client, pathToUrl, validResponse } from "./common";
+import { gql } from "@urql/core";
 
 export interface Pipeline {
   project: {
@@ -97,7 +98,7 @@ fragment PipelineParts on Pipeline {
 }
 `;
 
-const LATEST_PIPELINE_QUERY = `
+const LATEST_PIPELINE_QUERY = gql`
 ${PIPELINE_FRAGMENT}
 query DefaultBranchLatestPipeline($project: ID!, $defaultBranch: String!) {
     project(fullPath: $project) {
@@ -115,25 +116,22 @@ query DefaultBranchLatestPipeline($project: ID!, $defaultBranch: String!) {
 `;
 
 export function getLatestPipelineForBranch(projectFullPath: string, branchName: string): AsyncState<Pipeline> {
-  return useFetch<Pipeline | undefined>(graphQlEndpoint, {
-    headers: headers,
-    method: "post",
-    body: JSON.stringify({
-      query: LATEST_PIPELINE_QUERY,
-      variables: {
-        project: projectFullPath,
-        defaultBranch: branchName,
-      },
-    }),
-    parseResponse: async (res) => {
-      const data = await getJsonBodyIfSuccess(res);
-      if (data.data.project.pipelines.nodes.length === 0) {
+  return useCachedPromise(
+    async (project: string) => {
+      const response = await client.query(
+        LATEST_PIPELINE_QUERY,
+        {
+          project,
+          defaultBranch: branchName
+        }
+      ).toPromise();
+      const data = validResponse(response).data.project.pipelines.nodes;
+      if (data.length === 0) {
         return undefined;
       }
-      const pipeline = data.data.project.pipelines.nodes[0];
-      return convertToPipeline(pipeline);
+      return convertToPipeline(data[0]);
     },
-  });
+    [projectFullPath]);
 }
 
 export function convertToPipeline(pipelineResponse: PipelineApi): Pipeline {

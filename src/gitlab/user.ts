@@ -1,6 +1,6 @@
-import { getJsonBodyIfSuccess, graphQlEndpoint, headers } from "./common";
+import { client, validResponse } from "./common";
 import { myUsername as myUsernameFromStorage } from "../storage";
-import fetch from "node-fetch";
+import { gql } from "@urql/core";
 
 export interface User {
   name: string;
@@ -9,7 +9,7 @@ export interface User {
   teamUsername: string;
 }
 
-const CURRENT_USER_QUERY = `
+const CURRENT_USER_QUERY = gql`
 query CurrentUser {
     currentUser {
         username
@@ -17,16 +17,9 @@ query CurrentUser {
 }
 `;
 
-export function myUsername(): Promise<string> {
-  return fetch(graphQlEndpoint, {
-    headers: headers,
-    method: "post",
-    body: JSON.stringify({
-      query: CURRENT_USER_QUERY,
-    }),
-  })
-    .then(getJsonBodyIfSuccess)
-    .then((data) => data.data.currentUser.username);
+export async function myUsername(): Promise<string> {
+  const res = await client.query(CURRENT_USER_QUERY, {}).toPromise();
+  return validResponse(res).data.currentUser.username;
 }
 
 export async function enrichUser(u: User) {
