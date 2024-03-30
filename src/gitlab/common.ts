@@ -1,6 +1,5 @@
 import { getPreferenceValues } from "@raycast/api";
 import { Client, OperationResult, cacheExchange, fetchExchange } from "@urql/core";
-import { Response as NodeFetchResponse } from "node-fetch";
 import fetch from "node-fetch";
 
 interface Preferences {
@@ -10,21 +9,14 @@ interface Preferences {
 }
 const preferences = getPreferenceValues<Preferences>();
 
-export const headers = {
-  Authorization: `bearer ${preferences.gitlabToken}`,
-  "Content-Type": "application/json",
-};
-
 export interface Jira {
   key: string;
   url: string;
 }
 
-export const graphQlEndpoint = `${preferences.gitlabInstance}/api/graphql`;
-
 export const client = new Client({
   fetch: fetch,
-  url: graphQlEndpoint,
+  url: `${preferences.gitlabInstance}/api/graphql`,
   exchanges: [cacheExchange, fetchExchange],
   fetchOptions: () => {
     return {
@@ -47,21 +39,6 @@ export function validResponse(res: OperationResult<any, any>): OperationResult<a
     throw new AuthorizationError(res.error.message)
   }
   throw new UnknownServerError(res.error.message)
-}
-
-export async function getJsonBodyIfSuccess(res: Response | NodeFetchResponse) {
-  if (res.ok) {
-    const body = await res.json();
-    if (body.errors?.length > 0) {
-      throw new ApiValidationError(body.errors[0].message);
-    }
-    return body;
-  }
-
-  if (res.status === 401 || res.status === 403) {
-    throw new AuthorizationError(`${res.status} ${res.statusText}`);
-  }
-  throw new UnknownServerError(`${res.status} ${res.statusText}`);
 }
 
 export class AuthorizationError extends Error {}
