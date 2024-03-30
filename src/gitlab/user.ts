@@ -1,4 +1,4 @@
-import { client, validResponse } from "./common";
+import { client, validResponse } from "./client";
 import { myUsername as myUsernameFromStorage } from "../storage";
 import { gql } from "@urql/core";
 

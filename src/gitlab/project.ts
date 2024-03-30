@@ -1,5 +1,5 @@
 import { gql } from "@urql/core";
-import { client, validResponse } from "./common";
+import { client, validResponse } from "./client";
 
 export interface Project {
   id: string;

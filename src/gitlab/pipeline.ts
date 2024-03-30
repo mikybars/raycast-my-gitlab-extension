@@ -1,5 +1,6 @@
 import { AsyncState, useCachedPromise } from "@raycast/utils";
-import { client, pathToUrl, validResponse } from "./common";
+import { pathToUrl } from "./common";
+import { client, validResponse } from "./client";
 import { gql } from "@urql/core";
 
 export interface Pipeline {

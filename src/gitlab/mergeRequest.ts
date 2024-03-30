@@ -1,5 +1,6 @@
 import { AsyncState, useCachedPromise } from "@raycast/utils";
-import { Jira, tryExtractJira, validResponse, client } from "./common";
+import { Jira, tryExtractJira } from "./common";
+import { client, validResponse } from "./client";
 import { Pipeline, convertToPipeline, PIPELINE_FRAGMENT, PipelineApi } from "./pipeline";
 import { User, enrichUser } from "./user";
 import { lastMrUpdateTimes } from "../storage";
