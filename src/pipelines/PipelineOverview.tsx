@@ -7,8 +7,8 @@ import React from "react";
 export function PipelineOverview(props: { pipeline: Pipeline }) {
   return (
     <List.Item
-      title={{ value: props.pipeline.branchName, tooltip: `Pipeline is ${props.pipeline.status}` }}
-      subtitle={{ value: props.pipeline.commit.title, tooltip: `Pipeline is ${props.pipeline.status}` }}
+      title={{ value: props.pipeline.branchName ?? "<unknown>", tooltip: `Pipeline is ${props.pipeline.status}` }}
+      subtitle={{ value: props.pipeline.commit?.fullTitle, tooltip: `Pipeline is ${props.pipeline.status}` }}
       icon={pipelineStatusIcon(props.pipeline)}
       accessories={pipelineAccesories(props.pipeline)}
       actions={<PipelineActions pipeline={props.pipeline} />}
@@ -18,13 +18,13 @@ export function PipelineOverview(props: { pipeline: Pipeline }) {
 
 function pipelineStatusIcon(pipeline: Pipeline): Image.ImageLike {
   switch (pipeline.status) {
-    case "failed":
+    case "FAILED":
       return { source: Icon.XMarkCircle, tintColor: Color.Red };
-    case "running":
+    case "RUNNING":
       return { source: Icon.CircleProgress25, tintColor: Color.Blue };
-    case "success":
+    case "SUCCESS":
       return { source: Icon.CheckCircle, tintColor: Color.Green };
-    case "pending":
+    case "PENDING":
       return { source: Icon.Play, tintColor: Color.Blue };
     default:
       return { source: Icon.QuestionMarkCircle, tintColor: Color.PrimaryText };

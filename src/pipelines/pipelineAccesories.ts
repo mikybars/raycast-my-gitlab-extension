@@ -9,7 +9,7 @@ const preferences = getPreferenceValues<Preferences>();
 
 export const pipelineAccessoryFactories = {
   failedJobs: (pipeline: Pipeline) => {
-    if (pipeline.status === "failed" && pipeline.hasFailedJobs) {
+    if (pipeline.status === "FAILED" && pipeline.failedJobs.length > 0) {
       const failed_job = pipeline.failedJobs[0];
       return {
         text: {
@@ -21,7 +21,7 @@ export const pipelineAccessoryFactories = {
   },
 
   runningJobs: (pipeline: Pipeline) => {
-    if (pipeline.hasRunningJobs) {
+    if (pipeline.runningJobs.length > 0) {
       const running_job = pipeline.runningJobs[0];
       return {
         text: {

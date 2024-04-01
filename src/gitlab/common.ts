@@ -12,13 +12,8 @@ export interface Jira {
   url: string;
 }
 
-export function pathToUrl(path: string): string {
-  return `${preferences.gitlabInstance}${path}`;
-}
-
 export class AuthorizationError extends Error {}
 export class UnknownServerError extends Error {}
-export class ApiValidationError extends Error {}
 
 export function tryExtractJira(s: string): Jira | undefined {
   if ((preferences.jiraInstance ?? "") === "") {
@@ -32,4 +27,13 @@ export function tryExtractJira(s: string): Jira | undefined {
       url: `${preferences.jiraInstance}/browse/${jiraKey}`,
     };
   }
+}
+
+// https://www.chakshunyu.com/blog/how-to-filter-nullable-values-from-an-array-using-typescript/
+export function isNonNullable<TValue>(value: TValue | undefined | null): value is TValue {
+  return value !== null && value !== undefined; // Can also be `!!value`.
+}
+
+export function onlyNonNullables<TValue>(value: (TValue | null)[] | null | undefined): TValue[] {
+  return value?.filter(isNonNullable) ?? [];
 }

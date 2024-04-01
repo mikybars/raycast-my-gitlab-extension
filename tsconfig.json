@@ -11,6 +11,20 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "jsx": "react-jsx",
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "plugins": [ 
+      { 
+        "name": "@0no-co/graphqlsp", 
+        "schema": {
+          "url": "https://gitlab.com/api/graphql", 
+          // introspection query may need credentials to overcome max query complexity problems
+          // @see: https://docs.gitlab.com/ee/api/graphql/#limits
+          // "headers": {
+          //   "Authorization": "bearer glpat-XXXXXXXXXX-"
+          // }
+        },
+        "tadaOutputLocation": "./src/graphql-env.d.ts"
+      } 
+    ]
   }
 }

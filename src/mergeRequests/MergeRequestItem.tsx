@@ -1,6 +1,6 @@
 import { ActionPanel, Color, Image, List } from "@raycast/api";
 import React from "react";
-import { MergeRequest, MergeRequestState } from "../gitlab/mergeRequest";
+import { MergeRequest } from "../gitlab/mergeRequest";
 import { mergeRequestAccessoryFactories } from "./mergeRequestAccessories";
 import { mergeRequestActionFactories } from "./mergeRequestActions";
 
@@ -10,15 +10,15 @@ export default function MergeRequestItem(props: { mr: MergeRequest }) {
       key={props.mr.id}
       title={props.mr.title}
       subtitle={props.mr.jira?.key}
-      icon={mrIcon(props.mr.state)}
+      icon={mrIcon(props.mr)}
       actions={<MergeRequestActions mr={props.mr} />}
       accessories={mergeRequestAccessories(props.mr)}
     />
   );
 }
 
-function mrIcon(mrState: MergeRequestState): Image.ImageLike {
-  switch (mrState) {
+function mrIcon(mr: MergeRequest): Image.ImageLike {
+  switch (mr.state) {
     case "opened":
       return {
         source: "../assets/mropen.png",
@@ -30,7 +30,7 @@ function mrIcon(mrState: MergeRequestState): Image.ImageLike {
         tintColor: Color.Magenta,
       };
     default:
-      throw `invalid mr state: ${mrState}`;
+      throw `invalid mr state: ${mr.state}`;
   }
 }
 

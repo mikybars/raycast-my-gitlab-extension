@@ -1,159 +1,112 @@
 import { AsyncState, useCachedPromise } from "@raycast/utils";
-import { pathToUrl } from "./common";
-import { client, validResponse } from "./client";
-import { gql } from "@urql/core";
+import { preferences, onlyNonNullables } from "./common";
+import { client, graphql, ResultOf, validResponse } from "./graphql";
 
-export interface Pipeline {
-  project: {
-    fullPath: string;
-  };
-  branchName: string;
-  commit: {
-    title: string;
-  };
-  status: PipelineStatus;
-  updatedAt: string;
-  webUrl: string;
-  runningJobs: Job[];
-  failedJobs: Job[];
-  hasRunningJobs: boolean;
-  hasFailedJobs: boolean;
-  failureReason: string;
-}
+export type PipelineApi = ResultOf<typeof pipelineFragment>;
+export type Pipeline = Omit<PipelineApi, "path" | "runningJobs" | "failedJobs"> & PipelineCustom;
 
-type PipelineStatus =
-  | "created"
-  | "waiting_for_response"
-  | "preparing"
-  | "pending"
-  | "running"
-  | "success"
-  | "failed"
-  | "failed"
-  | "canceled"
-  | "skipped"
-  | "manual"
-  | "scheduled";
-
-export type PipelineApi = Pipeline & {
-  ref: string;
-  path: string;
-  createdAt: string;
-  commit: {
-    fullTitle: string;
-  };
-  webPath: string;
-  runningJobs: {
-    nodes: JobApi[];
-  };
-  failedJobs: {
-    nodes: JobApi[];
-  };
+type PipelineCustom = {
+  branchName?: string;
+  webUrl?: string;
+  runningJobs: CiJob[];
+  failedJobs: CiJob[];
 };
 
-export interface Job {
-  name: string;
-  stage: string;
-  web_url: string;
-}
+export type CiJobApi = ResultOf<typeof jobFragment>;
+export type CiJob = Omit<CiJobApi, "webPath"> & CiJobCustom;
 
-type JobApi = Job & {
-  stage: {
-    name: string;
-  };
-  webPath: string;
+type CiJobCustom = {
+  webUrl?: string;
 };
 
-const jobFragment = `
-fragment JobParts on CiJob {
+const jobFragment = graphql(`
+  fragment Job on CiJob @_unmask {
     stage {
-        name
+      name
     }
     name
     webPath
-}
-`;
+  }
+`);
 
-export const PIPELINE_FRAGMENT = `
-${jobFragment}
-fragment PipelineParts on Pipeline {
-    ref
-    status
-    path
-    createdAt
-    updatedAt
-    failureReason
-    commit {
+export const pipelineFragment = graphql(
+  `
+    fragment Pipeline on Pipeline @_unmask {
+      ref
+      status
+      path
+      updatedAt
+      failureReason
+      project {
+        fullPath
+      }
+      commit {
         fullTitle
-    }
-    runningJobs: jobs(statuses: [RUNNING]) {
+      }
+      runningJobs: jobs(statuses: [RUNNING]) {
         nodes {
-            ...JobParts
+          ...Job
         }
-    },
-    failedJobs: jobs(statuses: [FAILED]) {
+      }
+      failedJobs: jobs(statuses: [FAILED]) {
         nodes {
-            ...JobParts
+          ...Job
         }
+      }
     }
-}
-`;
+  `,
+  [jobFragment],
+);
 
-const LATEST_PIPELINE_QUERY = gql`
-${PIPELINE_FRAGMENT}
-query DefaultBranchLatestPipeline($project: ID!, $defaultBranch: String!) {
-    project(fullPath: $project) {
+const latestPipelineQuery = graphql(
+  `
+    query DefaultBranchLatestPipeline($project: ID!, $defaultBranch: String!) {
+      project(fullPath: $project) {
         name
         pipelines(ref: $defaultBranch, first: 1) {
-            nodes {
-                project {
-                    fullPath
-                }
-                ...PipelineParts
-            }
+          nodes {
+            ...Pipeline
+          }
         }
+      }
     }
-}
-`;
+  `,
+  [pipelineFragment],
+);
 
 export function getLatestPipelineForBranch(projectFullPath: string, branchName: string): AsyncState<Pipeline> {
   return useCachedPromise(
     async (project: string) => {
-      const response = await client.query(
-        LATEST_PIPELINE_QUERY,
-        {
+      const response = await client
+        .query(latestPipelineQuery, {
           project,
-          defaultBranch: branchName
-        }
-      ).toPromise();
-      const data = validResponse(response).data.project.pipelines.nodes;
-      if (data.length === 0) {
-        return undefined;
-      }
-      return convertToPipeline(data[0]);
+          defaultBranch: branchName,
+        })
+        .toPromise();
+      const { data } = validResponse(response);
+      const pipelines = onlyNonNullables(data.project?.pipelines?.nodes);
+      return pipelines.length > 0 ? transform(pipelines[0]) : undefined;
     },
-    [projectFullPath]);
+    [projectFullPath],
+  );
 }
 
-export function convertToPipeline(pipelineResponse: PipelineApi): Pipeline {
-  function convertToJob(job: JobApi) {
+export function transform(pipeline: PipelineApi): Pipeline {
+  function pathToUrl(path: string): string {
+    return `${preferences.gitlabInstance}${path}`;
+  }
+  function transformJob(job: CiJobApi): CiJob {
     return {
-      stage: job.stage.name,
-      name: job.name,
-      web_url: pathToUrl(job.webPath),
+      ...job,
+      webUrl: job.webPath ? pathToUrl(job.webPath) : undefined,
     };
   }
+
   return {
-    ...pipelineResponse,
-    commit: {
-      title: pipelineResponse.commit.fullTitle,
-    },
-    branchName: pipelineResponse.ref,
-    status: pipelineResponse.status.toLowerCase() as PipelineStatus,
-    webUrl: pathToUrl(pipelineResponse.path),
-    runningJobs: pipelineResponse.runningJobs.nodes.map(convertToJob),
-    failedJobs: pipelineResponse.failedJobs.nodes.map(convertToJob),
-    hasRunningJobs: pipelineResponse.runningJobs.nodes.length > 0,
-    hasFailedJobs: pipelineResponse.failedJobs.nodes.length > 0,
+    ...pipeline,
+    branchName: pipeline.ref ?? undefined,
+    webUrl: pipeline.path ? pathToUrl(pipeline.path) : undefined,
+    runningJobs: onlyNonNullables(pipeline.runningJobs?.nodes).map(transformJob),
+    failedJobs: onlyNonNullables(pipeline.failedJobs?.nodes).map(transformJob),
   };
 }

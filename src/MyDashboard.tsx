@@ -3,11 +3,12 @@ import { AsyncState } from "@raycast/utils";
 import { useEffect, useState } from "react";
 import { ProjectSection } from "./projects/ProjectSection";
 import { ErrorView } from "./ErrorView";
-import { saveLastMrUpdateTimes } from "./storage";
-import { MergeRequest, allMergedMergeRequestsToday, allOpenMergeRequests } from "./gitlab/mergeRequest";
+import { allMergedMergeRequestsToday, allOpenMergeRequests, MergeRequest } from "./gitlab/mergeRequest";
 import { Pipeline, getLatestPipelineForBranch } from "./gitlab/pipeline";
 import { Project } from "./gitlab/project";
 import { useLoadingToast } from "./hooks/useLoadingToast";
+import { isNonNullable } from "./gitlab/common";
+import { saveLastMrUpdateTimes } from "./storage";
 
 export class NoProjectsError extends Error {}
 
@@ -20,14 +21,17 @@ export function MyDashboard(props: { projects: Project[] }) {
     ...props.projects.map((proj) => proj.fullPath).map(allOpenMergeRequests),
     ...props.projects.map((proj) => proj.fullPath).map(allMergedMergeRequestsToday),
   ];
-  const latestPipelines = props.projects.map((proj) => getLatestPipelineForBranch(proj.fullPath, proj.defaultBranch));
+  const noop = { isLoading: false, error: undefined, data: undefined };
+  const latestPipelines = props.projects.map((proj) =>
+    proj.defaultBranch ? getLatestPipelineForBranch(proj.fullPath, proj.defaultBranch) : noop,
+  );
   const allNetworkRequests = [...mergeRequests, ...latestPipelines];
 
   const [selectedProject, setSelectedProject] = useState<Project>();
 
   useEffect(() => {
-    if (mergeRequests.every((r) => !r.isLoading && !r.error)) {
-      const fetchedMrs = mergeRequests.flatMap((r) => r.data).filter((mr): mr is MergeRequest => !!mr);
+    if (mergeRequests.every((r) => r.data)) {
+      const fetchedMrs = mergeRequests.flatMap((r) => r.data!);
       saveLastMrUpdateTimes(fetchedMrs);
     }
   }, [mergeRequests.some((r) => r.isLoading)]);
@@ -83,15 +87,15 @@ function ProjectsDropdown(props: { projects: Project[]; onSelect: (proj: Project
 function unwrapMergeRequestsByProject(requests: AsyncState<MergeRequest[]>[], projFullPath: string): MergeRequest[] {
   return requests
     .flatMap((r) => r.data)
-    .filter((mr): mr is MergeRequest => !!mr)
+    .filter(isNonNullable)
     .filter((mr) => mr.project.fullPath === projFullPath);
 }
 
 function unwrapPipelineByProject(requests: AsyncState<Pipeline>[], projFullPath: string): Pipeline | undefined {
   return requests
     .map((r) => r.data)
-    .filter((p): p is Pipeline => !!p)
-    .find((p) => p.project.fullPath === projFullPath);
+    .filter(isNonNullable)
+    .find((p) => p.project?.fullPath === projFullPath);
 }
 
 function NoProjectsErrorView() {

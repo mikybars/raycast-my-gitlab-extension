@@ -1,213 +1,181 @@
 import { AsyncState, useCachedPromise } from "@raycast/utils";
-import { Jira, tryExtractJira } from "./common";
-import { client, validResponse } from "./client";
-import { Pipeline, convertToPipeline, PIPELINE_FRAGMENT, PipelineApi } from "./pipeline";
-import { User, enrichUser } from "./user";
-import { lastMrUpdateTimes } from "../storage";
+import { Jira, onlyNonNullables, tryExtractJira } from "./common";
+import { pipelineFragment, Pipeline, transform as transformPipeline } from "./pipeline";
+import { User, userFragment, UserTransform, transform as transformUser } from "./user";
+import { MrUpdateTimes, lastMrUpdateTimes } from "../storage";
 import dayjs from "dayjs";
-import { gql } from '@urql/core';
+import { client, graphql, ResultOf, validResponse, VariablesOf } from "./graphql";
 
-export interface MergeRequest {
-  project: {
-    fullPath: string;
-  };
-  id: string;
-  iid: string;
-  title: string;
-  sha: string;
-  state: MergeRequestState;
-  draft: boolean;
-  createdAt: string;
-  updatedAt: string;
+export type MergeRequestApi = ResultOf<typeof mergeRequestFragment>;
+export type MergeRequest = Omit<MergeRequestApi, "approvedBy" | "author" | "conflicts" | "mergedBy" | "headPipeline"> &
+  MergeRequestExtension;
+
+type MergeRequestExtension = {
   hasUpdates: boolean;
+  hasAllApprovals: boolean;
+  jira: Jira | undefined;
   hasConflicts: boolean;
-  webUrl: string;
-  sourceBranch: string;
-  jira?: Jira;
-  author: User;
+  approvedBy: User[];
+  mergedBy?: User;
+  author?: User;
+  headPipeline?: Pipeline;
   comments: Comment[];
   unresolvedCommentsCount: number;
-  hasComments: boolean;
-  approvedBy: User[];
-  hasApprovers: boolean;
-  hasAllApprovals: boolean;
-  mergedBy?: User;
-  latestPipeline?: Pipeline;
-  mergeOptions: {
-    squash: boolean;
-  };
-}
-
-export type MergeRequestState = "opened" | "closed" | "locked" | "merged";
-
-type MergeRequestApi = MergeRequest & {
-  approvalsLeft: number;
-  diffHeadSha: string;
-  conflicts: boolean;
-  approvedBy: {
-    nodes: User[];
-  };
-  mergeUser: User;
-  notes: {
-    nodes: CommentApi[];
-  };
-  squashOnMerge: boolean;
-  headPipeline: PipelineApi;
 };
 
-export interface Comment {
-  id: string;
-  body: string;
-  author: User;
-  updatedAt: string;
+export type CommentApi = ResultOf<typeof commentFragment>;
+export type Comment = Omit<CommentApi, "author"> & CommentExtension;
+
+type CommentExtension = {
   isUnresolved: boolean;
-  webUrl: string;
-}
-
-type CommentApi = Comment & {
-  system: boolean;
-  resolvable: boolean;
-  resolved: boolean;
-  url: string;
+  author?: User;
 };
 
-export class MergeRequestCannotBeMergedError extends Error { }
+export class MergeRequestCannotBeMergedError extends Error {}
 
-const LIST_MERGE_REQUESTS_QUERY = gql`
-${PIPELINE_FRAGMENT}
-query ListMergeRequests($project: ID!, $state: MergeRequestState = opened, $mergedAfter: Time) {
-    project(fullPath: $project) {
-        mergeRequests(state: $state, mergedAfter: $mergedAfter) {
-            nodes {
-                id
-                iid
-                title
-                diffHeadSha
-                state
-                draft
-                createdAt
-                updatedAt
-                conflicts
-                webUrl
-                sourceBranch
-                squashOnMerge
-                author {
-                    name
-                    username
-                }
-                notes {
-                    nodes {
-                        id
-                        author {
-                            name
-                            username
-                        }
-                        body
-                        system
-                        updatedAt
-                        resolvable
-                        resolved
-                        url
-                    }
-                }
-                project {
-                    fullPath
-                }
-                approvalsLeft
-                approvedBy {
-                    nodes {
-                        name
-                        username
-                    }
-                }
-                mergeUser {
-                    name
-                    username
-                }
-                headPipeline {
-                    ...PipelineParts
-                }
-            }
+const authorFragment = graphql(`
+  fragment MergeRequestAuthor on MergeRequestAuthor @_unmask {
+    name
+    username
+  }
+`);
+
+const commentFragment = graphql(
+  `
+    fragment Comment on Note @_unmask {
+      id
+      author {
+        ...User
+      }
+      system
+      resolvable
+      resolved
+    }
+  `,
+  [userFragment],
+);
+
+const mergeRequestFragment = graphql(
+  `
+    fragment MergeRequest on MergeRequest @_unmask {
+      id
+      iid
+      title
+      diffHeadSha
+      state
+      draft
+      createdAt
+      updatedAt
+      conflicts
+      webUrl
+      sourceBranch
+      squashOnMerge
+      author {
+        ...MergeRequestAuthor
+      }
+      notes {
+        nodes {
+          ...Comment
         }
+      }
+      project {
+        fullPath
+      }
+      approvalsLeft
+      approvedBy {
+        nodes {
+          ...User
+        }
+      }
+      mergeUser {
+        ...User
+      }
+      headPipeline {
+        ...Pipeline
+      }
     }
-}
-`;
+  `,
+  [pipelineFragment, userFragment, authorFragment, commentFragment],
+);
 
-const MERGE_REQUEST_SET_DRAFT_MUTATION = `
-mutation MergeRequestSetDraftMutation($project: ID!, $mrId: String!, $draft: Boolean!) {
-    mergeRequestSetDraft(input: {
-        projectPath: $project,
-        iid: $mrId,
-        draft: $draft
-    }) {
-        errors
+const mergeRequestsQuery = graphql(
+  `
+    query ListMergeRequests($project: ID!, $state: MergeRequestState = opened, $mergedAfter: Time) {
+      project(fullPath: $project) {
+        mergeRequests(state: $state, mergedAfter: $mergedAfter) {
+          nodes {
+            ...MergeRequest
+          }
+        }
+      }
     }
-}
-`;
+  `,
+  [mergeRequestFragment],
+);
 
-const MERGE_REQUEST_ACCEPT_MUTATION = `
-mutation MergeRequestAcceptMutation($project: ID!, $mrId: String!, $sha: String!, $squash: Boolean) {
-    mergeRequestAccept(input: {
-        projectPath: $project,
-        iid: $mrId,
-        sha: $sha,
-        squash: $squash
-    }) {
-        errors
+const setDraftMutation = graphql(`
+  mutation MergeRequestSetDraftMutation($project: ID!, $mrId: String!, $draft: Boolean!) {
+    mergeRequestSetDraft(input: { projectPath: $project, iid: $mrId, draft: $draft }) {
+      errors
     }
+  }
+`);
+
+const acceptMutation = graphql(`
+  mutation MergeRequestAcceptMutation($project: ID!, $mrId: String!, $sha: String!, $squash: Boolean) {
+    mergeRequestAccept(input: { projectPath: $project, iid: $mrId, sha: $sha, squash: $squash }) {
+      errors
+    }
+  }
+`);
+
+async function listMergeRequests(args: VariablesOf<typeof mergeRequestsQuery>): Promise<MergeRequest[]> {
+  const response = await client.query(mergeRequestsQuery, args).toPromise();
+  const { data } = validResponse(response);
+  const mrs = onlyNonNullables(data.project?.mergeRequests?.nodes);
+  return transform(mrs, await transformUser(), await lastMrUpdateTimes());
 }
-`;
 
 export async function markAsReady(mr: MergeRequest): Promise<void> {
-  const res = await client.mutation(
-    MERGE_REQUEST_SET_DRAFT_MUTATION,
-    {
+  const res = await client
+    .mutation(setDraftMutation, {
       project: mr.project.fullPath,
       mrId: mr.iid,
-      draft: false
-    }
-  ).toPromise();
+      draft: false,
+    })
+    .toPromise();
   validResponse(res);
 }
 
 export async function markAsDraft(mr: MergeRequest): Promise<void> {
-  const res = await client.mutation(
-    MERGE_REQUEST_SET_DRAFT_MUTATION,
-    {
+  const res = await client
+    .mutation(setDraftMutation, {
       project: mr.project.fullPath,
       mrId: mr.iid,
-      draft: true
-    }
-  ).toPromise();
+      draft: true,
+    })
+    .toPromise();
   validResponse(res);
 }
 
 export async function merge(mr: MergeRequest): Promise<void> {
-  const res = await client.mutation(
-    MERGE_REQUEST_ACCEPT_MUTATION,
-    {
+  const res = await client
+    .mutation(acceptMutation, {
       project: mr.project.fullPath,
       mrId: mr.iid,
-      sha: mr.sha,
-      squash: mr.mergeOptions.squash
-    }
-  ).toPromise();
-  const errors = res.data.mergeRequestAccept.errors;
+      sha: mr.diffHeadSha!,
+      squash: mr.squashOnMerge,
+    })
+    .toPromise();
+  const { data } = validResponse(res);
+  const errors = data.mergeRequestAccept?.errors ?? [];
   if (errors.length > 0) {
     throw new MergeRequestCannotBeMergedError(errors[0]);
   }
 }
 
-async function mergeRequestsQuery(args) {
-  const response = await client.query(LIST_MERGE_REQUESTS_QUERY, args).toPromise();
-  const data = validResponse(response).data.project.mergeRequests.nodes;
-  return await convertToMergeRequests(data);
-}
-
 export function allOpenMergeRequests(projectFullPath: string): AsyncState<MergeRequest[]> {
-  return useCachedPromise(
-    (project) => mergeRequestsQuery({ project }),
-    [projectFullPath]);
+  return useCachedPromise((project) => listMergeRequests({ project }), [projectFullPath]);
 }
 
 export function allMergedMergeRequestsToday(projectFullPath: string): AsyncState<MergeRequest[]> {
@@ -218,46 +186,40 @@ export function allMergedMergeRequestsToday(projectFullPath: string): AsyncState
   }
 
   return useCachedPromise(
-    (project) => mergeRequestsQuery({ project, state: "merged", mergedAfter: todayAtMidnightIso() }),
-    [projectFullPath]);
+    (project) => listMergeRequests({ project, state: "merged", mergedAfter: todayAtMidnightIso() }),
+    [projectFullPath],
+  );
 }
 
-async function convertToMergeRequests(mergeRequestsResponse: MergeRequestApi[]): Promise<MergeRequest[]> {
-  function convertToComment(comment: CommentApi) {
+function transform(
+  mergeRequests: MergeRequestApi[],
+  transformUser: UserTransform,
+  lastMrUpdateTimes: MrUpdateTimes,
+): MergeRequest[] {
+  function transformComment(comment: CommentApi): Comment {
     return {
       ...comment,
       isUnresolved: comment.resolvable && !comment.resolved,
-      webUrl: comment.url,
+      author: comment.author ? transformUser(comment.author) : undefined,
     };
   }
 
-  const lastUpdateTimes = await lastMrUpdateTimes();
-
-  const mrs = mergeRequestsResponse.map((mr) => ({
-    ...mr,
-    hasAllApprovals: mr.approvalsLeft === 0,
-    sha: mr.diffHeadSha,
-    hasConflicts: mr.conflicts,
-    hasUpdates: lastUpdateTimes.get(mr.id)?.isBefore(dayjs(mr.updatedAt), "second") ?? false,
-    jira: tryExtractJira(mr.title),
-    approvedBy: mr.approvedBy.nodes,
-    mergedBy: mr.mergeUser,
-    comments: mr.notes.nodes.filter((c) => !c.system).map(convertToComment),
-    latestPipeline: convertToPipeline(mr.headPipeline),
-    mergeOptions: {
-      squash: mr.squashOnMerge,
-    },
-  }));
-  mrs.forEach((mr) => (mr.hasComments = mr.comments.length > 0));
-  mrs.forEach((mr) => (mr.hasApprovers = mr.approvedBy.length > 0));
-  mrs.forEach((mr) => (mr.unresolvedCommentsCount = mr.comments.filter((c) => c.isUnresolved).length));
-  await Promise.all(
-    [
-      ...mrs.map((mr) => mr.author),
-      ...mrs.flatMap((mr) => mr.approvedBy),
-      ...mrs.filter((mr) => mr.mergedBy).map((mr) => mr.mergedBy),
-      ...mrs.flatMap((mr) => mr.comments).map((c) => c.author),
-    ].map(enrichUser),
-  );
-  return mrs;
+  return mergeRequests.map((mr) => {
+    const comments = onlyNonNullables(mr.notes.nodes)
+      .filter((c) => !c.system)
+      .map(transformComment);
+    return {
+      ...mr,
+      hasUpdates: lastMrUpdateTimes.get(mr.id)?.isBefore(dayjs(mr.updatedAt), "second") ?? false,
+      hasAllApprovals: mr.approvalsLeft === 0,
+      jira: tryExtractJira(mr.title),
+      approvedBy: onlyNonNullables(mr.approvedBy?.nodes).map(transformUser),
+      author: mr.author ? transformUser(mr.author) : undefined,
+      hasConflicts: mr.conflicts,
+      mergedBy: mr.mergeUser ? transformUser(mr.mergeUser) : undefined,
+      headPipeline: mr.headPipeline ? transformPipeline(mr.headPipeline) : undefined,
+      comments: comments,
+      unresolvedCommentsCount: comments.filter((c) => c.isUnresolved).length,
+    };
+  });
 }

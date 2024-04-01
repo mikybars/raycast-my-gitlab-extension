@@ -26,9 +26,9 @@ function prioritize(mr1: MergeRequest, mr2: MergeRequest): number {
   const openedFirst = () => (mr1.state === "opened" ? mr1First : mr2First);
   const oldestCreatedFirst = () => (dayjs(mr1.createdAt).isBefore(dayjs(mr2.createdAt)) ? mr1First : mr2First);
   const newestUpdatedFirst = () => (dayjs(mr1.updatedAt).isAfter(dayjs(mr2.updatedAt)) ? mr1First : mr2First);
-  const mineLast = () => (mr1.author.isMe ? mr2First : mr2.author.isMe ? mr1First : whoCares);
+  const mineLast = () => (mr1.author?.isMe ? mr2First : mr2.author?.isMe ? mr1First : whoCares);
   const isMineWithApprovesOrComments = (mr: MergeRequest) =>
-    mr.author.isMe && (mr.hasApprovers || mr.unresolvedCommentsCount > 0);
+    mr.author?.isMe && (mr.approvedBy.length > 0 || mr.unresolvedCommentsCount > 0);
 
   if (mr1.state !== mr2.state) {
     return openedFirst();
@@ -43,7 +43,7 @@ function prioritize(mr1: MergeRequest, mr2: MergeRequest): number {
   if (isMineWithApprovesOrComments(mr2) || mr2.hasUpdates) {
     return mr2First;
   }
-  if (mr1.author.username !== mr2.author.username) {
+  if (mr1.author?.username !== mr2.author?.username) {
     return mineLast();
   }
   return oldestCreatedFirst();

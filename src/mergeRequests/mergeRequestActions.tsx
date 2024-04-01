@@ -1,11 +1,10 @@
 import { Action, Color, Icon, Toast, showToast } from "@raycast/api";
-import { MergeRequest, MergeRequestCannotBeMergedError, markAsDraft, markAsReady, merge } from "../gitlab/mergeRequest";
-import { MergeRequestComments } from "./MergeRequestComments";
+import { MergeRequestCannotBeMergedError, markAsDraft, markAsReady, merge, MergeRequest } from "../gitlab/mergeRequest";
 
 export const mergeRequestActionFactories = {
   browse: {
     openInBrowser: (mr: MergeRequest) => {
-      return <Action.OpenInBrowser url={mr.webUrl} title="Open in Browser" />;
+      return <Action.OpenInBrowser url={mr.webUrl!} title="Open in Browser" />;
     },
 
     openJira: (mr: MergeRequest) => {
@@ -15,16 +14,23 @@ export const mergeRequestActionFactories = {
     },
 
     openPipeline: (mr: MergeRequest) => {
-      if (mr.latestPipeline?.status === "failed" && mr.latestPipeline?.hasFailedJobs) {
-        return (
-          <Action.OpenInBrowser
-            url={mr.latestPipeline!.failedJobs[0].web_url}
-            icon={{ source: Icon.Globe, tintColor: Color.Red }}
-            title="Open Failed Job"
-          />
-        );
-      } else if (mr.latestPipeline !== undefined) {
-        return <Action.OpenInBrowser url={mr.latestPipeline.webUrl} title="Open Pipeline" />;
+      if (!mr.headPipeline) {
+        return;
+      }
+
+      if (mr.headPipeline.status === "FAILED" && mr.headPipeline.failedJobs.length > 0) {
+        const firstFailedJob = mr.headPipeline.failedJobs[0];
+        if (firstFailedJob.webUrl) {
+          return (
+            <Action.OpenInBrowser
+              url={firstFailedJob.webUrl}
+              icon={{ source: Icon.Globe, tintColor: Color.Red }}
+              title="Open Failed Job"
+            />
+          );
+        }
+      } else if (mr.headPipeline.webUrl) {
+        return <Action.OpenInBrowser url={mr.headPipeline.webUrl} title="Open Pipeline" />;
       }
     },
   },
@@ -53,7 +59,7 @@ export const mergeRequestActionFactories = {
     merge: (mr: MergeRequest) => {
       return (
         <Action
-          title={mr.mergeOptions.squash ? "Merge with Squash" : "Merge with Commit"}
+          title={mr.squashOnMerge ? "Merge with Squash" : "Merge with Commit"}
           icon={{ source: "../assets/merged.png", tintColor: Color.Magenta }}
           onAction={() =>
             merge(mr)
@@ -72,17 +78,6 @@ export const mergeRequestActionFactories = {
       );
     },
 
-    showComments: (mr: MergeRequest) => {
-      if (mr.hasComments) {
-        return (
-          <Action.Push
-            title="Show Comments"
-            icon={Icon.Bubble}
-            target={<MergeRequestComments mrTitle={mr.title} comments={mr.comments} />}
-          />
-        );
-      }
-    },
   },
 
   copy: {
@@ -100,4 +95,4 @@ export const mergeRequestActionFactories = {
       }
     },
   },
-};
+}

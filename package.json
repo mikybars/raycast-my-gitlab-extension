@@ -32,9 +32,11 @@
     "@raycast/utils": "^1.10.1",
     "@urql/core": "^4.3.0",
     "dayjs": "^1.11.10",
+    "gql.tada": "^1.4.1",
     "node-fetch": "^3.3.2"
   },
   "devDependencies": {
+    "@0no-co/graphqlsp": "^1.7.1",
     "@raycast/eslint-config": "^1.0.6",
     "@types/node": "20.8.10",
     "@types/react": "18.2.27",

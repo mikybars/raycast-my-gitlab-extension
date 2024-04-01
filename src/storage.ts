@@ -36,7 +36,7 @@ async function getMyUsername() {
 
 async function fetchAndStoreMyUsername() {
   console.log("Username not found in local storage");
-  const fetched = await myUsernameFromApi();
+  const fetched = (await myUsernameFromApi()) ?? "";
   console.log(`Storing fetched username '${fetched}'`);
   await LocalStorage.setItem("my_user", fetched);
   return fetched;
